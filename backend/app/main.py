@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 
+from app.schemas.ioc import IOCCreate
+
 app = FastAPI(
     title="Threat Intelligence Operations Platform",
     description="REST API for collecting, managing, and analysing threat intelligence.",
@@ -17,6 +19,12 @@ def root():
 
 @app.get("/health")
 def health_check():
+    return {"status": "healthy"}
+
+
+@app.post("/iocs")
+def create_ioc(ioc: IOCCreate):
     return {
-        "status": "healthy"
+        "message": "IOC received successfully",
+        "ioc": ioc,
     }
