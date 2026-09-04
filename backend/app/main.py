@@ -13,6 +13,7 @@ from app.models.campaign import Campaign
 from app.schemas.campaign import CampaignCreate
 from app.models.mitre_technique import MitreTechnique
 from app.schemas.mitre_technique import MitreTechniqueCreate
+from app.models.campaign_mitre import campaign_mitre_techniques
 
 app = FastAPI(
     title="Threat Intelligence Operations Platform",
@@ -261,3 +262,101 @@ def get_mitre_techniques(
         .order_by(MitreTechnique.technique_id.asc())
         .all()
     )
+@app.post("/campaigns/{campaign_id}/techniques/{technique_id}")
+def add_technique_to_campaign(
+    campaign_id: int,
+    technique_id: int,
+    db: Session = Depends(get_db),
+):
+    campaign = (
+        db.query(Campaign)
+        .filter(Campaign.id == campaign_id)
+        .first()
+    )
+
+    if not campaign:
+        raise HTTPException(
+            status_code=404,
+            detail="Campaign not found",
+        )
+
+    technique = (
+        db.query(MitreTechnique)
+        .filter(MitreTechnique.id == technique_id)
+        .first()
+    )
+
+    if not technique:
+        raise HTTPException(
+            status_code=404,
+            detail="MITRE technique not found",
+        )
+
+    existing_link = db.execute(
+        campaign_mitre_techniques.select().where(
+            (campaign_mitre_techniques.c.campaign_id == campaign_id)
+            & (
+                campaign_mitre_techniques.c.mitre_technique_id
+                == technique_id
+            )
+        )
+    ).first()
+
+    if existing_link:
+        raise HTTPException(
+            status_code=409,
+            detail="Technique already linked to campaign",
+        )
+
+    db.execute(
+        campaign_mitre_techniques.insert().values(
+            campaign_id=campaign_id,
+            mitre_technique_id=technique_id,
+        )
+    )
+
+    db.commit()
+
+    return {
+        "message": "MITRE technique linked to campaign",
+        "campaign": campaign.name,
+        "technique_id": technique.technique_id,
+        "technique_name": technique.name,
+    }
+
+@app.get("/campaigns/{campaign_id}/techniques")
+def get_campaign_techniques(
+    campaign_id: int,
+    db: Session = Depends(get_db),
+):
+    campaign = (
+        db.query(Campaign)
+        .filter(Campaign.id == campaign_id)
+        .first()
+    )
+
+    if not campaign:
+        raise HTTPException(
+            status_code=404,
+            detail="Campaign not found",
+        )
+
+    techniques = (
+        db.query(MitreTechnique)
+        .join(
+            campaign_mitre_techniques,
+            MitreTechnique.id
+            == campaign_mitre_techniques.c.mitre_technique_id,
+        )
+        .filter(
+            campaign_mitre_techniques.c.campaign_id
+            == campaign_id
+        )
+        .all()
+    )
+
+    return {
+        "campaign_id": campaign.id,
+        "campaign_name": campaign.name,
+        "techniques": techniques,
+    }
