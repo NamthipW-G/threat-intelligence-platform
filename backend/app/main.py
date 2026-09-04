@@ -2,6 +2,7 @@ from fastapi import Depends, FastAPI
 from sqlalchemy.orm import Session
 from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlalchemy.orm import Session
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.models.threat_actor import ThreatActor
 from app.schemas.threat_actor import ThreatActorCreate
@@ -20,6 +21,14 @@ app = FastAPI(
     title="Threat Intelligence Operations Platform",
     description="REST API for collecting, managing, and analysing threat intelligence.",
     version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 Base.metadata.create_all(bind=engine)
