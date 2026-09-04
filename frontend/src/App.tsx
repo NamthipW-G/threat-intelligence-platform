@@ -40,27 +40,61 @@ function App() {
   const [selectedIOC, setSelectedIOC] =
     useState<IntelligenceResponse | null>(null);
 
-  useEffect(() => {
-    fetch("http://127.0.0.1:8000/iocs")
-      .then((response) => response.json())
-      .then((data) => setIocs(data))
-      .catch((error) => {
-        console.error("Failed to load IOCs:", error);
-      });
-  }, []);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [investigating, setInvestigating] = useState(false);
 
-  const loadIntelligence = async (iocId: number) => {
+  useEffect(() => {
+  const loadIOCs = async () => {
     try {
+      setLoading(true);
+      setError(null);
+
       const response = await fetch(
-        `http://127.0.0.1:8000/iocs/${iocId}/intelligence`
+        "http://127.0.0.1:8000/iocs"
       );
 
+      if (!response.ok) {
+        throw new Error("Failed to load threat intelligence");
+      }
+
       const data = await response.json();
-      setSelectedIOC(data);
+      setIocs(data);
     } catch (error) {
-      console.error("Failed to load intelligence:", error);
+      console.error(error);
+      setError(
+        "Unable to connect to the threat intelligence API."
+      );
+    } finally {
+      setLoading(false);
     }
   };
+
+  loadIOCs();
+}, []);
+
+  const loadIntelligence = async (iocId: number) => {
+  try {
+    setInvestigating(true);
+    setError(null);
+
+    const response = await fetch(
+      `http://127.0.0.1:8000/iocs/${iocId}/intelligence`
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to load IOC intelligence");
+    }
+
+    const data = await response.json();
+    setSelectedIOC(data);
+  } catch (error) {
+    console.error(error);
+    setError("Unable to load correlated intelligence.");
+  } finally {
+    setInvestigating(false);
+  }
+};
 
   const highRiskCount = iocs.filter(
     (ioc) =>
@@ -97,6 +131,18 @@ function App() {
         </article>
       </section>
 
+      {loading && (
+  <div className="status-message">
+    Loading threat intelligence...
+  </div>
+)}
+
+{error && (
+  <div className="status-message error-message">
+    {error}
+  </div>
+)}
+      
       <section className="panel">
         <div className="panel-heading">
           <div>
@@ -135,8 +181,9 @@ function App() {
                   <td>
                     <button
                       onClick={() => loadIntelligence(ioc.id)}
+                      disabled={investigating}
                     >
-                      Investigate
+                      {investigating ? "Investigating..." : "Investigate"}
                     </button>
                   </td>
                 </tr>

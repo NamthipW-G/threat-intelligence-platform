@@ -233,3 +233,22 @@ button:hover {
     text-align: left;
   }
 }
+
+.status-message {
+  margin-bottom: 24px;
+  padding: 16px 18px;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  background: #0d1828;
+  color: #91a1b7;
+}
+
+.error-message {
+  border-color: #7f1d1d;
+  color: #fca5a5;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
