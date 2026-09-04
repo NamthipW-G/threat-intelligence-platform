@@ -11,6 +11,8 @@ from app.models import IOC
 from app.schemas.ioc import IOCCreate
 from app.models.campaign import Campaign
 from app.schemas.campaign import CampaignCreate
+from app.models.mitre_technique import MitreTechnique
+from app.schemas.mitre_technique import MitreTechniqueCreate
 
 app = FastAPI(
     title="Threat Intelligence Operations Platform",
@@ -213,5 +215,49 @@ def get_campaigns(
     return (
         db.query(Campaign)
         .order_by(Campaign.created_at.desc())
+        .all()
+    )
+
+@app.post("/mitre-techniques")
+def create_mitre_technique(
+    technique_data: MitreTechniqueCreate,
+    db: Session = Depends(get_db),
+):
+    existing_technique = (
+        db.query(MitreTechnique)
+        .filter(
+            MitreTechnique.technique_id
+            == technique_data.technique_id
+        )
+        .first()
+    )
+
+    if existing_technique:
+        raise HTTPException(
+            status_code=409,
+            detail="MITRE technique already exists",
+        )
+
+    technique = MitreTechnique(
+        technique_id=technique_data.technique_id,
+        name=technique_data.name,
+        tactic=technique_data.tactic,
+        description=technique_data.description,
+    )
+
+    db.add(technique)
+    db.commit()
+    db.refresh(technique)
+
+    return technique
+
+
+@app.get("/mitre-techniques")
+def get_mitre_techniques(
+    db: Session = Depends(get_db),
+):
+    return (
+        db.query(MitreTechnique)
+        .order_by(MitreTechnique.technique_id.asc())
         .all()
     )
