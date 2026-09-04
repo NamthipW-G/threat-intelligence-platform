@@ -14,6 +14,7 @@ from app.schemas.campaign import CampaignCreate
 from app.models.mitre_technique import MitreTechnique
 from app.schemas.mitre_technique import MitreTechniqueCreate
 from app.models.campaign_mitre import campaign_mitre_techniques
+from app.models.ioc_campaign import ioc_campaigns
 
 app = FastAPI(
     title="Threat Intelligence Operations Platform",
@@ -359,4 +360,149 @@ def get_campaign_techniques(
         "campaign_id": campaign.id,
         "campaign_name": campaign.name,
         "techniques": techniques,
+    }
+
+@app.post("/iocs/{ioc_id}/campaigns/{campaign_id}")
+def link_ioc_to_campaign(
+    ioc_id: int,
+    campaign_id: int,
+    db: Session = Depends(get_db),
+):
+    ioc = db.query(IOC).filter(IOC.id == ioc_id).first()
+
+    if not ioc:
+        raise HTTPException(
+            status_code=404,
+            detail="IOC not found",
+        )
+
+    campaign = (
+        db.query(Campaign)
+        .filter(Campaign.id == campaign_id)
+        .first()
+    )
+
+    if not campaign:
+        raise HTTPException(
+            status_code=404,
+            detail="Campaign not found",
+        )
+
+    existing_link = db.execute(
+        ioc_campaigns.select().where(
+            (ioc_campaigns.c.ioc_id == ioc_id)
+            & (ioc_campaigns.c.campaign_id == campaign_id)
+        )
+    ).first()
+
+    if existing_link:
+        raise HTTPException(
+            status_code=409,
+            detail="IOC already linked to campaign",
+        )
+
+    db.execute(
+        ioc_campaigns.insert().values(
+            ioc_id=ioc_id,
+            campaign_id=campaign_id,
+        )
+    )
+
+    db.commit()
+
+    return {
+        "message": "IOC linked to campaign",
+        "ioc": ioc.value,
+        "campaign": campaign.name,
+    }
+
+@app.get("/iocs/{ioc_id}/intelligence")
+def get_ioc_intelligence(
+    ioc_id: int,
+    db: Session = Depends(get_db),
+):
+    ioc = db.query(IOC).filter(IOC.id == ioc_id).first()
+
+    if not ioc:
+        raise HTTPException(
+            status_code=404,
+            detail="IOC not found",
+        )
+
+    campaigns = (
+        db.query(Campaign)
+        .join(
+            ioc_campaigns,
+            Campaign.id == ioc_campaigns.c.campaign_id,
+        )
+        .filter(ioc_campaigns.c.ioc_id == ioc_id)
+        .all()
+    )
+
+    risk_score = calculate_risk_score(
+        severity=ioc.severity,
+        confidence=ioc.confidence,
+    )
+
+    if risk_score >= 85:
+        risk_level = "critical"
+    elif risk_score >= 70:
+        risk_level = "high"
+    elif risk_score >= 40:
+        risk_level = "medium"
+    else:
+        risk_level = "low"
+
+    campaign_data = []
+
+    for campaign in campaigns:
+        actor = (
+            db.query(ThreatActor)
+            .filter(ThreatActor.id == campaign.threat_actor_id)
+            .first()
+        )
+
+        techniques = (
+            db.query(MitreTechnique)
+            .join(
+                campaign_mitre_techniques,
+                MitreTechnique.id
+                == campaign_mitre_techniques.c.mitre_technique_id,
+            )
+            .filter(
+                campaign_mitre_techniques.c.campaign_id
+                == campaign.id
+            )
+            .all()
+        )
+
+        campaign_data.append(
+            {
+                "campaign_id": campaign.id,
+                "campaign_name": campaign.name,
+                "threat_actor": actor.name if actor else None,
+                "techniques": [
+                    {
+                        "technique_id": technique.technique_id,
+                        "name": technique.name,
+                        "tactic": technique.tactic,
+                    }
+                    for technique in techniques
+                ],
+            }
+        )
+
+    return {
+        "ioc": {
+            "id": ioc.id,
+            "type": ioc.type,
+            "value": ioc.value,
+            "severity": ioc.severity,
+            "confidence": ioc.confidence,
+        },
+        "risk": {
+            "score": risk_score,
+            "level": risk_level,
+        },
+        "campaigns": campaign_data,
     }
