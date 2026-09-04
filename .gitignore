@@ -2,15 +2,19 @@
 backend/.venv/
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # Environment / secrets
 .env
+.env.*
 *.env
+!.env.example
 
 # IDE / OS
 .vscode/
 .DS_Store
+Thumbs.db
 
-# Frontend - ใช้ทีหลัง
+# Frontend
 frontend/node_modules/
 frontend/dist/
